@@ -5,14 +5,11 @@ use League\OAuth2\Client\Provider\GenericProvider;
 require_once 'vendor/autoload.php';
 
 $appURL = "https://{$_SERVER['HTTP_HOST']}";
-$clientId = $_ENV['CLIENT_ID'] ?? null;
-$clientSecret = $_ENV['CLIENT_SECRET'] ?? null;
-
-$appName = str_replace( '.herokuapp.com', '', $_SERVER['SERVER_NAME']);
-$settingsURL = "https://dashboard.heroku.com/apps/{$appName}/settings";
+$clientId = ${{ secrets.ID }} ?? null;
+$clientSecret = ${{ secrets.SECRET_KEY }} ?? null;
 
 if (!$clientId || !$clientSecret) {
-    echo "Пожалуйста, настройте переменные окружения CLIENT_ID и CLIENT_SECRET в настройках приложения на сайте heroku.com. {$settingsURL}";
+    echo "Пожалуйста, настройте переменные окружения CLIENT_ID и CLIENT_SECRET в настройках приложения.";
 }
 
 $provider = new GenericProvider([
