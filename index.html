@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>amo-мессенджер OAuth авторизация</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+        .error {
+            border-color: #dc3545;
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .success {
+            border-color: #28a745;
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>amo-мессенджер авторизация</h1>
+        
+        <div id="auth-section">
+            <button class="btn" onclick="startAuth()">Авторизоваться через amo</button>
+        </div>
+
+        <div id="results" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Конфигурация (замените на свои значения)
+        const config = {
+            clientId: '2c3c4a0e-7d7f-11f0-bb0f-c2e45f72ac04', // Замените на ваш Client ID
+            clientSecret: 'OPkuzkuHLf5IWOOy6d482VEjGDDVJouq0S0i9luhTE1WyA6uc2l6pPEAE6RaQZot', // Замените на ваш Client Secret
+            redirectUri: window.location.href.split('?')[0], // Текущий URL без параметров
+            authUrl: 'https://id.amo.tm/access',
+            tokenUrl: 'https://id.amo.tm/oauth2/access_token',
+            validateUrl: 'https://id.amo.tm/oauth2/validate'
+        };
+
+        // Генерация state параметра
+        function generateState() {
+            return Math.random().toString(36).substring(2) + Date.now().toString(36);
+        }
+
+        // Начало авторизации
+        function startAuth() {
+            const state = generateState();
+            
+            // Сохраняем state в localStorage
+            localStorage.setItem('oauth_state', state);
+            
+            // Формируем URL для авторизации
+            const authUrl = new URL(config.authUrl);
+            authUrl.searchParams.append('client_id', config.clientId);
+            authUrl.searchParams.append('redirect_uri', config.redirectUri);
+            authUrl.searchParams.append('response_type', 'code');
+            authUrl.searchParams.append('state', state);
+            authUrl.searchParams.append('scope', ''); // Добавьте нужные scopes при необходимости
+            
+            // Перенаправляем на страницу авторизации
+            window.location.href = authUrl.toString();
+        }
+
+        // Обмен кода на токен
+        async function exchangeCodeForToken(code) {
+            try {
+                const response = await fetch(config.tokenUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        client_id: config.clientId,
+                        client_secret: config.clientSecret,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: config.redirectUri
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Error exchanging code for token:', error);
+                throw error;
+            }
+        }
+
+        // Валидация токена и получение информации о пользователе
+        async function validateToken(accessToken) {
+            try {
+                const response = await fetch(config.validateUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Error validating token:', error);
+                throw error;
+            }
+        }
+
+        // Отображение результатов
+        function displayResults(tokenData, userData) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = 'result success';
+
+            resultsDiv.innerHTML = `
+                <h2>✅ Авторизация успешна!</h2>
+                <p><strong>Access Token:</strong> ${tokenData.access_token}</p>
+                <p><strong>Refresh Token:</strong> ${tokenData.refresh_token}</p>
+                <p><strong>Expires in:</strong> ${tokenData.expires_in} секунд</p>
+                <hr>
+                <p><strong>User UUID:</strong> ${userData.user_uuid || 'N/A'}</p>
+                <p><strong>Company UUID:</strong> ${userData.company_uuid || 'N/A'}</p>
+                <p><strong>Client UUID:</strong> ${userData.client_uuid || 'N/A'}</p>
+                <p><strong>Account ID:</strong> ${userData.account_id || 'N/A'}</p>
+                <hr>
+                <p>Окно закроется автоматически через 15 секунд</p>
+            `;
+
+            setTimeout(() => {
+                window.close();
+            }, 15000);
+        }
+
+        // Отображение ошибки
+        function displayError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = 'result error';
+            resultsDiv.innerHTML = `<h2>❌ Ошибка авторизации</h2><p>${message}</p>`;
+        }
+
+        // Основная функция обработки OAuth flow
+        async function handleOAuthFlow() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+
+            // Проверяем ошибки от провайдера
+            if (error) {
+                displayError(`Ошибка от сервера авторизации: ${error}`);
+                return;
+            }
+
+            // Если есть код авторизации
+            if (code) {
+                try {
+                    // Проверяем state для защиты от CSRF
+                    const savedState = localStorage.getItem('oauth_state');
+                    if (!state || state !== savedState) {
+                        displayError('Неверный state параметр. Возможна CSRF атака.');
+                        return;
+                    }
+
+                    // Убираем кнопку авторизации
+                    document.getElementById('auth-section').style.display = 'none';
+
+                    // Обмениваем код на токен
+                    const tokenData = await exchangeCodeForToken(code);
+                    
+                    // Получаем информацию о пользователе
+                    const userData = await validateToken(tokenData.access_token);
+                    
+                    // Отображаем результаты
+                    displayResults(tokenData, userData);
+
+                    // Очищаем state
+                    localStorage.removeItem('oauth_state');
+
+                } catch (error) {
+                    displayError(`Произошла ошибка: ${error.message}`);
+                }
+            }
+        }
+
+        // Запускаем обработку при загрузке страницы
+        document.addEventListener('DOMContentLoaded', handleOAuthFlow);
+    </script>
+</body>
+</html>
